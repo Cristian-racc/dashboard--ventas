@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Ventas RACC</title>
+<!-- SheetJS para leer Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #f0f2f7;
+  --surface:  #ffffff;
+  --surface2: #f8f9fc;
+  --border:   #e2e6ef;
+  --border2:  #d0d6e8;
+  --text:     #1a2035;
+  --muted:    #6b7a99;
+  --faint:    #a0aec0;
+  --blue:     #3b6ef8;
+  --blue-lt:  #eef2ff;
+  --orange:   #f97316;
+  --orange-lt:#fff7ed;
+  --pink:     #ec4899;
+  --pink-lt:  #fdf2f8;
+  --green:    #10b981;
+  --purple:   #8b5cf6;
+  --yellow:   #f59e0b;
+  --cyan:     #06b6d4;
+  font-size: clamp(12px, 1vw, 15px);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+code,pre{font-family:'DM Mono',monospace;}
+
+/* ── UPLOAD OVERLAY ── */
+#uploadOverlay{
+  position:fixed;inset:0;background:rgba(240,242,247,0.97);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:999;transition:opacity .3s;
+}
+#uploadOverlay.hidden{opacity:0;pointer-events:none;}
+.upload-logo{font-size:2.8em;font-weight:700;color:var(--blue);letter-spacing:-0.03em;margin-bottom:.3em;}
+.upload-logo span{color:var(--text);}
+.upload-sub{font-size:.9em;color:var(--muted);margin-bottom:2.5em;}
+.drop-zone{
+  width:min(480px,90vw);border:2px dashed var(--border2);border-radius:1.2em;
+  padding:2.5em 2em;text-align:center;background:var(--surface);cursor:pointer;
+  transition:all .2s;position:relative;
+}
+.drop-zone:hover,.drop-zone.over{border-color:var(--blue);background:var(--blue-lt);}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:2.8em;margin-bottom:.5em;}
+.drop-title{font-size:1em;font-weight:600;color:var(--text);margin-bottom:.4em;}
+.drop-hint{font-size:.78em;color:var(--muted);}
+.or-sep{margin:1.4em 0;font-size:.78em;color:var(--faint);display:flex;align-items:center;gap:.8em;}
+.or-sep::before,.or-sep::after{content:'';flex:1;height:1px;background:var(--border);}
+.btn-demo{
+  display:inline-flex;align-items:center;gap:.5em;padding:.65em 1.5em;
+  border-radius:.6em;background:var(--blue);color:#fff;font-size:.85em;font-weight:600;
+  cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:opacity .15s;
+}
+.btn-demo:hover{opacity:.85;}
+.upload-note{margin-top:1.8em;font-size:.72em;color:var(--faint);max-width:400px;text-align:center;line-height:1.5;}
+
+/* ── HEADER ── */
+header{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:.9em 2em;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6em;
+  position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(0,0,0,.06);
+}
+.header-left{display:flex;align-items:center;gap:1em;}
+.logo-mark{width:2em;height:2em;background:var(--blue);border-radius:.5em;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.9em;flex-shrink:0;}
+header h1{font-size:1em;font-weight:700;color:var(--text);}
+header p{font-size:.72em;color:var(--muted);}
+.header-right{display:flex;align-items:center;gap:.6em;}
+.hbadge{padding:.25em .85em;border-radius:20px;font-size:.7em;font-weight:600;}
+.hbadge-green{background:#d1fae5;color:#065f46;}
+.btn-reload{
+  display:inline-flex;align-items:center;gap:.4em;padding:.35em .9em;border-radius:.5em;
+  background:var(--blue-lt);color:var(--blue);font-size:.72em;font-weight:600;
+  cursor:pointer;border:1px solid #c7d7fd;font-family:'DM Sans',sans-serif;transition:all .15s;
+}
+.btn-reload:hover{background:var(--blue);color:#fff;}
+
+/* ── KPIs ── */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:.75em;padding:1.2em 2em .85em;}
+.kpi{
+  background:var(--surface);border:1px solid var(--border);border-radius:.9em;
+  padding:1em .9em;position:relative;overflow:hidden;transition:box-shadow .15s;
+}
+.kpi:hover{box-shadow:0 4px 16px rgba(0,0,0,.07);}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--k-color,var(--blue));}
+.kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5em;}
+.kpi-icon{width:2em;height:2em;border-radius:.5em;display:flex;align-items:center;justify-content:center;font-size:.9em;background:var(--k-bg,var(--blue-lt));}
+.kpi-trend{font-size:.65em;font-weight:600;padding:.1em .5em;border-radius:20px;}
+.kpi-val{font-size:1.5em;font-weight:700;color:var(--text);line-height:1;margin-bottom:.2em;}
+.kpi-label{font-size:.65em;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500;}
+.kpi-sub{font-size:.7em;color:var(--faint);margin-top:.2em;}
+
+/* ── SECTIONS ── */
+.section-label{padding:.9em 2em .35em;font-size:.65em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;display:flex;align-items:center;gap:.6em;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.pad{padding:0 2em .9em;}
+
+/* ── CARDS ── */
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:.85em;}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:.9em;padding:1.2em;transition:box-shadow .15s;}
+.chart-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.05);}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1em;}
+.card-title{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;}
+
+/* ── PILLS ── */
+.tariff-pills{display:flex;flex-wrap:wrap;gap:.3em;margin-bottom:.7em;}
+.pill{padding:.2em .6em;border-radius:20px;font-size:.62em;font-weight:600;cursor:pointer;border:1.5px solid transparent;transition:all .15s;user-select:none;}
+.pill.active{opacity:1;}
+.pill:not(.active){opacity:.25;filter:grayscale(60%);}
+
+/* ── PUNTOS ── */
+.puntos-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85em;}
+.puntos-card{background:var(--surface);border:1px solid var(--border);border-radius:.9em;padding:1.2em;}
+.puntos-title{font-size:.72em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.85em;}
+.ps-row{padding:.45em .7em;border-radius:.5em;margin-bottom:.35em;background:var(--surface2);border:1px solid var(--border);font-size:.78em;}
+.bar-bg{height:3px;background:var(--border);border-radius:2px;margin-top:.3em;}
+.bar-fill{height:3px;border-radius:2px;transition:width .4s;}
+
+/* ── CARNET LEGEND ── */
+.carnet-wrapper{display:grid;grid-template-columns:1fr 1fr;gap:1em;align-items:center;}
+.cl-row{display:flex;align-items:center;gap:.5em;padding:.4em .5em;border-radius:.4em;margin-bottom:.2em;transition:background .1s;}
+.cl-row:hover{background:var(--surface2);}
+.cl-dot{width:.6em;height:.6em;border-radius:50%;flex-shrink:0;}
+.cl-name{flex:1;font-size:.75em;color:var(--muted);}
+.cl-pct{font-weight:700;font-size:.78em;min-width:2.5em;text-align:right;}
+.cl-eur{font-size:.72em;color:var(--faint);min-width:4em;text-align:right;}
+
+/* ── TABLE ── */
+.table-section{padding:0 2em 2em;}
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:.9em;overflow:hidden;}
+.table-header{padding:.85em 1.2em;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5em;}
+.table-header h3{font-size:.75em;font-weight:700;color:var(--text);}
+.filters{display:flex;gap:.5em;flex-wrap:wrap;padding:.6em 1.2em;background:var(--surface2);border-bottom:1px solid var(--border);}
+.filters select,.filters input{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:.3em .65em;border-radius:.45em;font-size:.75em;outline:none;font-family:'DM Sans',sans-serif;
+}
+.filters select:focus,.filters input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,110,248,.1);}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--surface2);}
+th{padding:.6em .9em;text-align:left;font-size:.67em;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;font-weight:600;}
+th:hover{color:var(--text);}
+td{padding:.55em .9em;font-size:.79em;border-bottom:1px solid var(--bg);vertical-align:middle;color:var(--text);}
+tr:hover td{background:var(--surface2);}
+.badge-pagado{background:#d1fae5;color:#065f46;padding:.15em .55em;border-radius:10px;font-size:.85em;font-weight:600;}
+.tag-tipo{padding:.15em .55em;border-radius:10px;font-size:.82em;font-weight:600;white-space:nowrap;}
+.tag-B {background:#eff6ff;color:#1d4ed8;}
+.tag-A {background:#f5f3ff;color:#6d28d9;}
+.tag-AM{background:#ecfdf5;color:#065f46;}
+.tag-PP{background:#fff7ed;color:#c2410c;}
+.tag-PT{background:#fdf2f8;color:#be185d;}
+.tag-A2{background:#faf5ff;color:#7c3aed;}
+.tag-A1{background:#eff6ff;color:#0369a1;}
+.importe-cell{font-weight:700;color:var(--blue);text-align:right;font-variant-numeric:tabular-nums;}
+.pagination{display:flex;justify-content:flex-end;align-items:center;gap:.35em;padding:.65em 1.2em;flex-wrap:wrap;background:var(--surface2);border-top:1px solid var(--border);}
+.pagination button{background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:.25em .65em;border-radius:.4em;cursor:pointer;font-size:.73em;min-width:1.9em;font-family:'DM Sans',sans-serif;}
+.pagination button.active{background:var(--blue);color:#fff;border-color:var(--blue);}
+.pagination button:hover:not(.active){border-color:var(--blue);color:var(--blue);}
+.page-info{font-size:.72em;color:var(--faint);margin-right:.4em;}
+
+/* ── EMPTY STATE ── */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3em;color:var(--faint);font-size:.85em;gap:.5em;}
+.empty-state span{font-size:2em;}
+
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(3,1fr);}
+  .charts-2,.puntos-grid,.carnet-wrapper{grid-template-columns:1fr;}
+  .kpis,.pad,.table-section,.section-label{padding-left:1em;padding-right:1em;}
+  header{padding:.8em 1em;}
+}
+@media(max-width:600px){.kpis{grid-template-columns:repeat(2,1fr);}}
+</style>
+</head>
+<body>
+
+<!-- ══ UPLOAD OVERLAY ══════════════════════════════════════════════════════ -->
+<div id="uploadOverlay">
+  <div class="upload-logo">RACC <span>Ventas</span></div>
+  <div class="upload-sub">Dashboard de ventas · Autoescuelas</div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".xls,.xlsx" />
+    <div class="drop-icon">📂</div>
+    <div class="drop-title">Arrastra tu Excel aquí</div>
+    <div class="drop-hint">Formatos aceptados: .xls · .xlsx</div>
+  </div>
+
+  <div class="or-sep">o</div>
+
+  <button class="btn-demo" id="btnDemo">⚡ Cargar datos de demostración</button>
+
+  <div class="upload-note">
+    ℹ️ El archivo se procesa <strong>localmente en tu navegador</strong>. Ningún dato se envía a servidores externos. Compatible con SharePoint, OneDrive y cualquier navegador moderno.
+  </div>
+</div>
+
+<!-- ══ DASHBOARD ═══════════════════════════════════════════════════════════ -->
+<div id="dashboardApp" style="display:none">
+
+<header>
+  <div class="header-left">
+    <div class="logo-mark">R</div>
+    <div>
+      <h1>Dashboard de Ventas RACC</h1>
+      <p id="headerSub">Autoescuelas · Cargando...</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="hbadge hbadge-green" id="headerBadge">— pedidos</span>
+    <button class="btn-reload" id="btnReload">↩ Cambiar Excel</button>
+  </div>
+</header>
+
+<!-- KPIs -->
+<div class="kpis">
+  <div class="kpi" style="--k-color:var(--blue);--k-bg:var(--blue-lt)">
+    <div class="kpi-top"><div class="kpi-icon">🎟️</div></div>
+    <div class="kpi-val" id="kpi-orders">—</div>
+    <div class="kpi-label">Total Pedidos</div>
+    <div class="kpi-sub">todos pagados</div>
+  </div>
+  <div class="kpi" style="--k-color:var(--orange);--k-bg:var(--orange-lt)">
+    <div class="kpi-top"><div class="kpi-icon">🔶</div></div>
+    <div class="kpi-val" id="kpi-pp-eur">—</div>
+    <div class="kpi-label">Facturación Puntos Parcial</div>
+    <div class="kpi-sub" id="kpi-pp-n">— pedidos</div>
+    <div class="kpi-sub" id="kpi-pp-avg">Promedio: —</div>
+  </div>
+  <div class="kpi" style="--k-color:var(--pink);--k-bg:var(--pink-lt)">
+    <div class="kpi-top"><div class="kpi-icon">🔷</div></div>
+    <div class="kpi-val" id="kpi-pt-eur">—</div>
+    <div class="kpi-label">Facturación Puntos Total</div>
+    <div class="kpi-sub" id="kpi-pt-n">— pedidos</div>
+    <div class="kpi-sub" id="kpi-pt-avg">Promedio: —</div>
+  </div>
+  <div class="kpi" style="--k-color:var(--green);--k-bg:#ecfdf5">
+    <div class="kpi-top"><div class="kpi-icon">🚗</div></div>
+    <div class="kpi-val" id="kpi-resto-eur">—</div>
+    <div class="kpi-label">Facturación Resto Carnets</div>
+    <div class="kpi-sub" id="kpi-resto-n">— pedidos</div>
+    <div class="kpi-sub" id="kpi-resto-avg">Promedio: —</div>
+  </div>
+  <div class="kpi" style="--k-color:var(--purple);--k-bg:#f5f3ff">
+    <div class="kpi-top"><div class="kpi-icon">🏫</div></div>
+    <div class="kpi-val" id="kpi-schools">—</div>
+    <div class="kpi-label">Autoescuelas</div>
+    <div class="kpi-sub">activas</div>
+  </div>
+</div>
+
+<!-- Evolución diaria -->
+<div class="section-label">📅 Evolución temporal</div>
+<div class="pad">
+  <div class="chart-card">
+    <div class="card-header">
+      <div class="card-title">Ventas diarias — Facturación (€) y Nº Pedidos</div>
+    </div>
+    <canvas id="chartDiario" height="55"></canvas>
+  </div>
+</div>
+
+<!-- Top escuelas + Tarifas donut -->
+<div class="section-label">🏫 Autoescuela y tarifa</div>
+<div class="pad charts-2">
+  <div class="chart-card">
+    <div class="card-header"><div class="card-title">Top 12 Autoescuelas por facturación</div></div>
+    <canvas id="chartAutoescuelas" height="230"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="card-header"><div class="card-title">Peso por tarifa — clic para filtrar</div></div>
+    <div class="tariff-pills" id="tariffPills"></div>
+    <canvas id="chartTarifa" height="195"></canvas>
+  </div>
+</div>
+
+<!-- Puntos desglose -->
+<div class="section-label">🔶 Cursos de Recuperación de Puntos</div>
+<div class="pad puntos-grid">
+  <div class="puntos-card">
+    <div class="puntos-title">Recuperación Parcial · €250 / pedido</div>
+    <div id="parcialList"><div class="empty-state"><span>⏳</span>Cargando...</div></div>
+    <div style="margin-top:.75em;padding-top:.6em;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:.75em;">
+      <span style="color:var(--muted)">TOTAL</span>
+      <span id="parcialTotal" style="color:var(--orange);font-weight:700"></span>
+    </div>
+  </div>
+  <div class="puntos-card">
+    <div class="puntos-title">Recuperación Total Permiso · €465 / pedido</div>
+    <div id="totalList"><div class="empty-state"><span>⏳</span>Cargando...</div></div>
+    <div style="margin-top:.75em;padding-top:.6em;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:.75em;">
+      <span style="color:var(--muted)">TOTAL</span>
+      <span id="totalTotal" style="color:var(--pink);font-weight:700"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Carnet % -->
+<div class="section-label">🪪 Distribución por tipo de carnet (%)</div>
+<div class="pad">
+  <div class="chart-card">
+    <div class="card-header"><div class="card-title">% de pedidos y % de facturación por tipo de carnet</div></div>
+    <div class="carnet-wrapper">
+      <canvas id="chartCarnet" height="180"></canvas>
+      <div class="carnet-legend" id="carnetLegend"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabla -->
+<div class="section-label">📋 Listado detallado</div>
+<div class="table-section">
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Todos los pedidos</h3>
+      <span id="count-label" style="font-size:.72em;color:var(--muted)"></span>
+    </div>
+    <div class="filters">
+      <input type="text" id="filterAutoescuela" placeholder="🔍 Autoescuela..." style="min-width:160px">
+      <select id="filterTarifa"><option value="">Todas las tarifas</option></select>
+      <select id="filterFecha"><option value="">Todas las fechas</option></select>
+      <select id="filterCarnet"><option value="">Todos los carnets</option></select>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="sortTable('pedido')">Pedido ↕</th>
+            <th onclick="sortTable('fecha')">Fecha ↕</th>
+            <th>Autoescuela</th>
+            <th>Tarifa</th>
+            <th>Carnet</th>
+            <th>Estado</th>
+            <th onclick="sortTable('importe')" style="text-align:right">Importe ↕</th>
+          </tr>
+        </thead>
+        <tbody id="tabla-body"></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</div>
+</div><!-- /dashboardApp -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// DEMO DATA (mismo formato que el Excel real)
+// ═══════════════════════════════════════════════════════════════════════════
+const DEMO_DATA = [
+  {pedido:40355,fecha:"01/04/2026",autoescuela:"RACC SANT CUGAT COLL FAVA",tarifa:"Pack Teórica + 10 Clases",importe:531},
+  {pedido:40358,fecha:"01/04/2026",autoescuela:"RACC SANT FELIU DE LLOBREGAT",tarifa:"Pack Teórica + 20 Clases",importe:837},
+  {pedido:40363,fecha:"01/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40364,fecha:"01/04/2026",autoescuela:"RACC BANYOLES",tarifa:"Pack Teórica + 10 Clases",importe:846},
+  {pedido:40368,fecha:"01/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40371,fecha:"01/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40372,fecha:"01/04/2026",autoescuela:"RACC REUS PERE CERIMONIOS",tarifa:"Pack Teórica + 20 Clases",importe:792},
+  {pedido:40374,fecha:"01/04/2026",autoescuela:"RACC AVINGUDA TIBIDABO",tarifa:"Pack Teórica + 10 Clases",importe:549},
+  {pedido:40379,fecha:"01/04/2026",autoescuela:"RACC PADILLA",tarifa:"Pack Teórica + 30 Clases",importe:1035},
+  {pedido:40380,fecha:"01/04/2026",autoescuela:"RACC CORNELLA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40387,fecha:"02/04/2026",autoescuela:"RACC VIC",tarifa:"Pack Teórica + 30 Clases",importe:1299.6},
+  {pedido:40388,fecha:"02/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Pack Teórica + 10 Clases",importe:549},
+  {pedido:40393,fecha:"02/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40394,fecha:"02/04/2026",autoescuela:"RACC MOLLET",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40395,fecha:"02/04/2026",autoescuela:"RACC UAB",tarifa:"Pack Teórica + 20 Clases",importe:1053},
+  {pedido:40396,fecha:"02/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40399,fecha:"02/04/2026",autoescuela:"RACC BARBERÀ DEL VALLÈS",tarifa:"Pack A1",importe:567},
+  {pedido:40403,fecha:"02/04/2026",autoescuela:"RACC MANRESA",tarifa:"Pack Teórica",importe:297},
+  {pedido:40407,fecha:"03/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40414,fecha:"03/04/2026",autoescuela:"RACC SABADELL SOL",tarifa:"Pack Teórica",importe:202.5},
+  {pedido:40417,fecha:"03/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack Teórica",importe:285},
+  {pedido:40418,fecha:"03/04/2026",autoescuela:"RACC TERRASSA 22 JULIOL",tarifa:"Pack Teórica + 20 Clases",importe:837},
+  {pedido:40420,fecha:"03/04/2026",autoescuela:"RACC TERRASSA 22 JULIOL",tarifa:"Pack Teórica + 10 Clases",importe:531},
+  {pedido:40422,fecha:"03/04/2026",autoescuela:"RACC SALT",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40426,fecha:"04/04/2026",autoescuela:"RACC LLEIDA",tarifa:"Pack Teórica + 30 Clases",importe:1043.1},
+  {pedido:40428,fecha:"04/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40440,fecha:"05/04/2026",autoescuela:"RACC TERRASSA 22 JULIOL",tarifa:"Compra 10 clases y paga solo 9",importe:382.5},
+  {pedido:40441,fecha:"05/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40453,fecha:"05/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40454,fecha:"05/04/2026",autoescuela:"RACC MANRESA",tarifa:"Pack con Teórica aprobada + 10 clases",importe:583.2},
+  {pedido:40455,fecha:"05/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40456,fecha:"05/04/2026",autoescuela:"RACC UAB",tarifa:"Pack Teórica + 20 Clases",importe:1053},
+  {pedido:40457,fecha:"06/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40458,fecha:"06/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Pack Teórica + 20 Clases",importe:936},
+  {pedido:40463,fecha:"06/04/2026",autoescuela:"RACC PADILLA",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40465,fecha:"06/04/2026",autoescuela:"RACC HOSPITALET SANTA EULALIA",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40467,fecha:"06/04/2026",autoescuela:"RACC HOSPITALET SANTA EULALIA",tarifa:"Pack Teórica + 30 Clases",importe:1035},
+  {pedido:40468,fecha:"06/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack con Teórica aprobada + 10 clases",importe:540},
+  {pedido:40470,fecha:"06/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Pack Teórica + 10 Clases",importe:621},
+  {pedido:40471,fecha:"06/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Pack Teórica + 10 Clases",importe:621},
+  {pedido:40475,fecha:"06/04/2026",autoescuela:"RACC MOLLET",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40477,fecha:"06/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40478,fecha:"06/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack Teórica",importe:256.5},
+  {pedido:40479,fecha:"06/04/2026",autoescuela:"RACC GIRONA CREU",tarifa:"Pack Teórica",importe:359.1},
+  {pedido:40480,fecha:"06/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40484,fecha:"06/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40486,fecha:"06/04/2026",autoescuela:"RACC PALAFOLLS",tarifa:"Pack AM",importe:198},
+  {pedido:40487,fecha:"06/04/2026",autoescuela:"RACC HOSPITALET CENTRE",tarifa:"Pack A1",importe:445.5},
+  {pedido:40491,fecha:"06/04/2026",autoescuela:"RACC LES CORTS",tarifa:"Pack Teórica + 10 Clases",importe:549},
+  {pedido:40492,fecha:"06/04/2026",autoescuela:"RACC MATARO JOSEP PLA",tarifa:"Pack AM",importe:198},
+  {pedido:40499,fecha:"07/04/2026",autoescuela:"RACC ZARAGOZA CORONA",tarifa:"Pack Teórica + 20 Clases",importe:675},
+  {pedido:40500,fecha:"07/04/2026",autoescuela:"RACC CORSEGA",tarifa:"Pack Teórica + 30 Clases",importe:1035},
+  {pedido:40507,fecha:"07/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40511,fecha:"07/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40512,fecha:"07/04/2026",autoescuela:"RACC VILAFRANCA DEL PENEDÈS",tarifa:"Pack con Teórica aprobada + 10 clases",importe:769.5},
+  {pedido:40518,fecha:"07/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40520,fecha:"07/04/2026",autoescuela:"RACC TARRAGONA",tarifa:"Pack Teórica + 10 Clases",importe:526.5},
+  {pedido:40521,fecha:"07/04/2026",autoescuela:"RACC REUS PERE CERIMONIOS",tarifa:"Pack Teórica + 30 Clases",importe:1071},
+  {pedido:40524,fecha:"07/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack Teórica",importe:256.5},
+  {pedido:40525,fecha:"07/04/2026",autoescuela:"RACC LLEIDA",tarifa:"Pack Teórica + 30 Clases",importe:1043.1},
+  {pedido:40526,fecha:"07/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack con Teórica aprobada + 10 clases",importe:600},
+  {pedido:40527,fecha:"07/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40528,fecha:"07/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40529,fecha:"07/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Pack AM",importe:198},
+  {pedido:40532,fecha:"07/04/2026",autoescuela:"RACC LA CAMPANA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40534,fecha:"08/04/2026",autoescuela:"RACC CORNELLA",tarifa:"Pack Teórica",importe:285},
+  {pedido:40535,fecha:"08/04/2026",autoescuela:"RACC SANT CUGAT COLL FAVA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40547,fecha:"08/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40568,fecha:"08/04/2026",autoescuela:"RACC TERRASSA 22 JULIOL",tarifa:"Compra 10 clases y paga solo 9",importe:382.5},
+  {pedido:40570,fecha:"08/04/2026",autoescuela:"RACC VILANOVA I LA GELTRU",tarifa:"Pack Teórica + 10 Clases",importe:522},
+  {pedido:40576,fecha:"08/04/2026",autoescuela:"RACC MOLLET",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40579,fecha:"08/04/2026",autoescuela:"RACC TARRAGONA",tarifa:"Pack Teórica + 10 Clases",importe:526.5},
+  {pedido:40586,fecha:"09/04/2026",autoescuela:"RACC EIXAMPLE",tarifa:"Pack Teórica + 10 Clases",importe:549},
+  {pedido:40590,fecha:"09/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40592,fecha:"09/04/2026",autoescuela:"RACC TERRASSA RAMBLA EGARA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40594,fecha:"09/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40595,fecha:"09/04/2026",autoescuela:"RACC SABADELL ONZE SETEMBRE",tarifa:"Pack Teórica",importe:202.5},
+  {pedido:40600,fecha:"09/04/2026",autoescuela:"RACC LA SEU D'URGELL",tarifa:"Pack Teórica",importe:495},
+  {pedido:40604,fecha:"09/04/2026",autoescuela:"RACC RUBI",tarifa:"Pack A2",importe:504},
+  {pedido:40607,fecha:"09/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40610,fecha:"09/04/2026",autoescuela:"RACC HOSPITALET SANTA EULALIA",tarifa:"Pack Teórica + 20 Clases",importe:837},
+  {pedido:40616,fecha:"09/04/2026",autoescuela:"RACC SANT CUGAT COLL FAVA",tarifa:"Pack Teórica + 10 Clases",importe:531},
+  {pedido:40617,fecha:"09/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40618,fecha:"09/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40621,fecha:"09/04/2026",autoescuela:"RACC PADILLA",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40622,fecha:"09/04/2026",autoescuela:"RACC HOSPITALET CENTRE",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40626,fecha:"10/04/2026",autoescuela:"RACC CORNELLA",tarifa:"Pack Teórica",importe:256.5},
+  {pedido:40633,fecha:"10/04/2026",autoescuela:"RACC BADALONA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40639,fecha:"10/04/2026",autoescuela:"RACC TERRASSA RAMBLA EGARA",tarifa:"Pack Teórica + 30 Clases",importe:1134},
+  {pedido:40645,fecha:"10/04/2026",autoescuela:"RACC VILANOVA I LA GELTRU",tarifa:"Pack Teórica + 10 Clases",importe:522},
+  {pedido:40647,fecha:"10/04/2026",autoescuela:"RACC CORNELLA",tarifa:"Pack Teórica + 30 Clases",importe:1150},
+  {pedido:40654,fecha:"11/04/2026",autoescuela:"RACC VILADECANS GENERAL PRIM",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40664,fecha:"11/04/2026",autoescuela:"RACC TARRAGONA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40667,fecha:"11/04/2026",autoescuela:"RACC BADALONA",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40671,fecha:"12/04/2026",autoescuela:"RACC HOSPITALET CENTRE",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40672,fecha:"12/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Pack Teórica + 30 Clases",importe:1035},
+  {pedido:40673,fecha:"12/04/2026",autoescuela:"RACC PADILLA",tarifa:"Pack con Teórica aprobada + 10 clases",importe:600},
+  {pedido:40680,fecha:"13/04/2026",autoescuela:"RACC HOSPITALET CENTRE",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40683,fecha:"13/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40684,fecha:"13/04/2026",autoescuela:"RACC GIRONA CREU",tarifa:"Pack Teórica + 10 Clases",importe:899.1},
+  {pedido:40685,fecha:"13/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40691,fecha:"13/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40693,fecha:"13/04/2026",autoescuela:"RACC VILANOVA I LA GELTRU",tarifa:"Compra 10 clases y paga solo 9",importe:418.5},
+  {pedido:40695,fecha:"13/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40699,fecha:"13/04/2026",autoescuela:"RACC PALAFOLLS",tarifa:"Pack A2",importe:382.5},
+  {pedido:40702,fecha:"13/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40704,fecha:"13/04/2026",autoescuela:"RACC MATARO CAMI RAL",tarifa:"Pack Teórica + 10 Clases",importe:690},
+  {pedido:40706,fecha:"13/04/2026",autoescuela:"RACC VIC",tarifa:"Pack Teórica + 10 Clases",importe:676.8},
+  {pedido:40709,fecha:"14/04/2026",autoescuela:"RACC ZARAGOZA DELICIAS",tarifa:"Pack Teórica",importe:190},
+  {pedido:40713,fecha:"14/04/2026",autoescuela:"RACC SANT CUGAT COLL FAVA",tarifa:"Pack AM",importe:279},
+  {pedido:40714,fecha:"14/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40715,fecha:"14/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40716,fecha:"14/04/2026",autoescuela:"RACC PI I MARGALL",tarifa:"Curso de recuperación total de permiso",importe:465},
+  {pedido:40728,fecha:"14/04/2026",autoescuela:"RACC SANTALO",tarifa:"Pack con Teórica aprobada + 10 clases",importe:540},
+  {pedido:40732,fecha:"14/04/2026",autoescuela:"RACC SANT CUGAT CENTRE",tarifa:"Pack AM",importe:310},
+  {pedido:40733,fecha:"14/04/2026",autoescuela:"RACC REUS OQUES",tarifa:"Pack Teórica",importe:198},
+  {pedido:40734,fecha:"14/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40736,fecha:"15/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40737,fecha:"15/04/2026",autoescuela:"RACC ZONA UNIVERSITARIA",tarifa:"Compra 10 clases y paga solo 9",importe:360},
+  {pedido:40738,fecha:"15/04/2026",autoescuela:"RACC POBLE NOU",tarifa:"Curso de recuperación parcial de puntos",importe:250},
+  {pedido:40741,fecha:"15/04/2026",autoescuela:"RACC BARBERÀ DEL VALLÈS",tarifa:"Pack A2",importe:504},
+  {pedido:40743,fecha:"15/04/2026",autoescuela:"RACC PALAFOLLS",tarifa:"Pack A2",importe:382.5},
+  {pedido:40747,fecha:"15/04/2026",autoescuela:"RACC GAVA",tarifa:"Pack A",importe:314.1},
+  {pedido:40753,fecha:"15/04/2026",autoescuela:"RACC MANRESA",tarifa:"Pack A2",importe:543.6}
+];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXCEL PARSER — lee el formato del Export.xls de RACC
+// Cada pedido ocupa 5 filas. La primera fila tiene: col0=Nº, col2=Fecha,
+// col4=Estado, col5=Autoescuela, col9=Tarifa, col15=Importe
+// ═══════════════════════════════════════════════════════════════════════════
+function parseRACCExcel(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows  = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+  const records = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const val0 = String(r[0]||'').trim();
+    const pedidoNum = parseInt(val0, 10);
+    if (!isNaN(pedidoNum) && pedidoNum > 10000) {
+      const fechaRaw  = String(r[2]||'').trim();
+      const estado    = String(r[4]||'').trim();
+      const autoesc   = String(r[5]||'').trim();
+      const tarifa    = String(r[9]||'').trim();
+      const importeRaw= r[15];
+      const importe   = parseFloat(String(importeRaw).replace(',','.')) || 0;
+
+      // Normalise date to dd/mm/yyyy
+      let fecha = fechaRaw;
+      if (typeof importeRaw === 'number' && !isNaN(Date.parse(fechaRaw))) {
+        // Excel serial date
+        const d = XLSX.SSF.parse_date_code(r[2]);
+        if (d) fecha = `${String(d.d).padStart(2,'0')}/${String(d.m).padStart(2,'0')}/${d.y}`;
+      }
+
+      if (autoesc && tarifa && importe > 0) {
+        records.push({pedido: pedidoNum, fecha, estado, autoescuela: autoesc.toUpperCase(), tarifa, importe});
+      }
+    }
+  }
+  return records;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UPLOAD LOGIC
+// ═══════════════════════════════════════════════════════════════════════════
+const overlay   = document.getElementById('uploadOverlay');
+const dropZone  = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+function hideOverlay(){ overlay.classList.add('hidden'); setTimeout(()=>overlay.style.display='none',350); }
+function showOverlay(){ overlay.style.display='flex'; setTimeout(()=>overlay.classList.remove('hidden'),10); }
+
+document.getElementById('btnDemo').onclick = () => { initDashboard(DEMO_DATA); hideOverlay(); };
+document.getElementById('btnReload').onclick = () => {
+  showOverlay();
+  document.getElementById('dashboardApp').style.display='none';
+};
+
+fileInput.addEventListener('change', e => loadFile(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f) loadFile(f);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, {type:'array'});
+      const data = parseRACCExcel(wb);
+      if (data.length === 0) {
+        alert('No se encontraron pedidos en el Excel. Comprueba que el formato es el correcto (Export de pedidos RACC).');
+        return;
+      }
+      initDashboard(data);
+      hideOverlay();
+    } catch(err) {
+      alert('Error al leer el archivo: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHART INSTANCES (para destruir y recrear al cambiar datos)
+// ═══════════════════════════════════════════════════════════════════════════
+let chartInstances = {};
+function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN — initDashboard
+// ═══════════════════════════════════════════════════════════════════════════
+function initDashboard(DATA) {
+  document.getElementById('dashboardApp').style.display = 'block';
+
+  // Classify carnet
+  function getCarnet(t) {
+    const l = t.toLowerCase();
+    if (l.includes('pack am')) return 'AM';
+    if (l.includes('pack a2') || (l.includes('a2') && !l.includes('clases'))) return 'A2';
+    if (l.includes('pack a1') || (l.includes('a1') && !l.includes('clases'))) return 'A1';
+    if (t === 'Pack A') return 'A';
+    if (l.includes('parcial')) return 'Puntos Parcial';
+    if (l.includes('total')) return 'Puntos Total';
+    return 'B';
+  }
+  DATA.forEach(d => d.carnet = getCarnet(d.tarifa));
+
+  const totalAll   = DATA.reduce((s,d)=>s+d.importe,0);
+  const ppItems    = DATA.filter(d=>d.carnet==='Puntos Parcial');
+  const ptItems    = DATA.filter(d=>d.carnet==='Puntos Total');
+  const restoItems = DATA.filter(d=>d.carnet!=='Puntos Parcial' && d.carnet!=='Puntos Total');
+  const ppEur      = ppItems.reduce((s,d)=>s+d.importe,0);
+  const ptEur      = ptItems.reduce((s,d)=>s+d.importe,0);
+  const restoEur   = restoItems.reduce((s,d)=>s+d.importe,0);
+  const schools    = new Set(DATA.map(d=>d.autoescuela)).size;
+  const fmt        = (n,d=0) => n.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+  // Date range for subtitle
+  const allFechas = DATA.map(d=>d.fecha).filter(Boolean);
+  const toDate = f => { const[dd,mm,yy]=f.split('/'); return new Date(yy,mm-1,dd); };
+  allFechas.sort((a,b)=>toDate(a)-toDate(b));
+  const rangeStr = allFechas.length ? `${allFechas[0]} – ${allFechas[allFechas.length-1]}` : '';
+
+  document.getElementById('headerSub').textContent   = `Autoescuelas RACC · ${rangeStr}`;
+  document.getElementById('headerBadge').textContent = `${DATA.length} pedidos · Todo Pagado`;
+  document.getElementById('kpi-orders').textContent  = DATA.length;
+  document.getElementById('kpi-pp-eur').textContent  = '€'+fmt(ppEur);
+  document.getElementById('kpi-pp-n').textContent    = ppItems.length+' pedidos';
+  document.getElementById('kpi-pp-avg').textContent  = 'Promedio: €'+fmt(ppEur/(ppItems.length||1));
+  document.getElementById('kpi-pt-eur').textContent  = '€'+fmt(ptEur);
+  document.getElementById('kpi-pt-n').textContent    = ptItems.length+' pedidos';
+  document.getElementById('kpi-pt-avg').textContent  = 'Promedio: €'+fmt(ptEur/(ptItems.length||1));
+  document.getElementById('kpi-resto-eur').textContent= '€'+fmt(restoEur);
+  document.getElementById('kpi-resto-n').textContent  = restoItems.length+' pedidos';
+  document.getElementById('kpi-resto-avg').textContent= 'Promedio: €'+fmt(restoEur/(restoItems.length||1));
+  document.getElementById('kpi-schools').textContent  = schools;
+
+  // ── Chart 1: Daily ──────────────────────────────────────────────────────
+  destroyChart('diario');
+  const byDay={},cntDay={};
+  DATA.forEach(d=>{byDay[d.fecha]=(byDay[d.fecha]||0)+d.importe;cntDay[d.fecha]=(cntDay[d.fecha]||0)+1;});
+  const days=Object.keys(byDay).sort((a,b)=>toDate(a)-toDate(b));
+  chartInstances.diario = new Chart(document.getElementById('chartDiario'),{
+    type:'bar',
+    data:{labels:days.map(d=>d.slice(0,5)),datasets:[
+      {label:'Facturación (€)',data:days.map(d=>byDay[d]),backgroundColor:'rgba(59,110,248,0.6)',borderColor:'#3b6ef8',borderWidth:1,borderRadius:4,yAxisID:'y'},
+      {label:'Nº Pedidos',data:days.map(d=>cntDay[d]),type:'line',borderColor:'#f97316',backgroundColor:'rgba(249,115,22,0.08)',pointBackgroundColor:'#f97316',pointRadius:4,tension:0.35,yAxisID:'y2',fill:true}
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#6b7a99',font:{size:11}}},tooltip:{callbacks:{label:ctx=>ctx.datasetIndex===0?'€'+fmt(ctx.raw):ctx.raw+' pedidos'}}},
+      scales:{
+        x:{ticks:{color:'#6b7a99',font:{size:11}},grid:{color:'#e2e6ef'}},
+        y:{ticks:{color:'#3b6ef8',callback:v=>'€'+fmt(v)},grid:{color:'#e2e6ef'},position:'left'},
+        y2:{ticks:{color:'#f97316'},grid:{display:false},position:'right'}
+      }}
+  });
+
+  // ── Chart 2: Top schools ────────────────────────────────────────────────
+  destroyChart('schools');
+  const byS={};DATA.forEach(d=>{byS[d.autoescuela]=(byS[d.autoescuela]||0)+d.importe;});
+  const topS=Object.entries(byS).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const pal=['#3b6ef8','#8b5cf6','#10b981','#f97316','#ec4899','#06b6d4','#f59e0b','#6366f1','#14b8a6','#ef4444','#a3a3a3','#84cc16'];
+  chartInstances.schools = new Chart(document.getElementById('chartAutoescuelas'),{
+    type:'bar',
+    data:{labels:topS.map(s=>s[0].replace('RACC ','')),datasets:[{data:topS.map(s=>s[1]),backgroundColor:pal,borderRadius:5}]},
+    options:{indexAxis:'y',responsive:true,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'€'+fmt(ctx.raw)}}},
+      scales:{x:{ticks:{color:'#6b7a99',callback:v=>'€'+fmt(v)},grid:{color:'#e2e6ef'}},y:{ticks:{color:'#6b7a99',font:{size:10}},grid:{display:false}}}}
+  });
+
+  // ── Chart 3: Tarifas donut with % labels ────────────────────────────────
+  destroyChart('tarifa');
+  const tarifaColorMap={
+    'Pack Teórica + 10 Clases':'#3b6ef8','Pack Teórica + 20 Clases':'#8b5cf6',
+    'Pack Teórica + 30 Clases':'#10b981','Compra 10 clases y paga solo 9':'#f59e0b',
+    'Curso de recuperación parcial de puntos':'#f97316','Curso de recuperación total de permiso':'#ec4899',
+    'Pack Teórica':'#06b6d4','Pack con Teórica aprobada + 10 clases':'#6366f1',
+    'Pack AM':'#14b8a6','Pack A1':'#0ea5e9','Pack A2':'#a855f7','Pack A':'#d946ef'
+  };
+  const ALL_T=[...new Set(DATA.map(d=>d.tarifa))].sort();
+  let activeT=new Set(ALL_T);
+
+  // Rebuild pills
+  const pillsCont=document.getElementById('tariffPills');
+  pillsCont.innerHTML='';
+  ALL_T.forEach(t=>{
+    const el=document.createElement('div'); el.className='pill active'; el.title=t;
+    el.textContent=t.replace('Curso de recuperación ','Recup. ').replace(' de puntos','').replace(' de permiso','').replace('Pack con Teórica aprobada','Pack Aprobada');
+    const c=tarifaColorMap[t]||'#6b7a99';
+    el.style.cssText=`background:${c}18;border-color:${c};color:${c}`;
+    el.onclick=()=>{activeT.has(t)?activeT.delete(t):activeT.add(t);el.classList.toggle('active');updateDonut();};
+    pillsCont.appendChild(el);
+  });
+
+  // Plugin to draw % inside/outside each slice
+  const doughnutLabelsPlugin = {
+    id:'doughnutLabels',
+    afterDraw(chart) {
+      const {ctx,data} = chart;
+      const total = data.datasets[0].data.reduce((a,b)=>a+b,0);
+      if (!total) return;
+      chart.getDatasetMeta(0).data.forEach((arc,i) => {
+        const val = data.datasets[0].data[i];
+        const pct = (val/total*100);
+        if (pct < 3) return; // skip tiny slices
+        const mid = (arc.startAngle + arc.endAngle) / 2;
+        const r   = (arc.innerRadius + arc.outerRadius) / 2;
+        const x   = arc.x + r * Math.cos(mid);
+        const y   = arc.y + r * Math.sin(mid);
+        ctx.save();
+        ctx.font = 'bold 10px DM Sans, sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pct.toFixed(0)+'%', x, y);
+        ctx.restore();
+      });
+    }
+  };
+
+  const donutCtx = document.getElementById('chartTarifa');
+  chartInstances.tarifa = new Chart(donutCtx,{
+    type:'doughnut',
+    data:{labels:[],datasets:[{data:[],backgroundColor:[],borderWidth:2,borderColor:'#ffffff'}]},
+    plugins:[doughnutLabelsPlugin],
+    options:{responsive:true,cutout:'52%',
+      plugins:{
+        legend:{position:'right',labels:{color:'#6b7a99',font:{size:10},padding:8,boxWidth:10,generateLabels(chart){
+          const data=chart.data;
+          const total=data.datasets[0].data.reduce((a,b)=>a+b,0);
+          return data.labels.map((label,i)=>{
+            const val=data.datasets[0].data[i];
+            const pct=total?(val/total*100).toFixed(0)+'%':'0%';
+            return {text:`${label.replace('Curso de recuperación','Recup.').slice(0,28)} (${pct})`,fillStyle:data.datasets[0].backgroundColor[i],hidden:false,index:i};
+          });
+        }}},
+        tooltip:{callbacks:{label:ctx=>{
+          const total=ctx.dataset.data.reduce((a,b)=>a+b,0);
+          const pct=(ctx.raw/total*100).toFixed(1);
+          return `${ctx.label}: ${ctx.raw} pedidos (${pct}%)`;
+        }}}
+      }
+    }
+  });
+
+  function updateDonut(){
+    const m={};DATA.filter(d=>activeT.has(d.tarifa)).forEach(d=>{m[d.tarifa]=(m[d.tarifa]||0)+1;});
+    const e=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    chartInstances.tarifa.data.labels=e.map(x=>x[0]);
+    chartInstances.tarifa.data.datasets[0].data=e.map(x=>x[1]);
+    chartInstances.tarifa.data.datasets[0].backgroundColor=e.map(x=>tarifaColorMap[x[0]]||'#6b7a99');
+    chartInstances.tarifa.update();
+  }
+  updateDonut();
+
+  // ── Puntos breakdown ────────────────────────────────────────────────────
+  function buildPuntosList(items,listId,totId,color){
+    const m={};items.forEach(d=>{m[d.autoescuela]=(m[d.autoescuela]||0)+1;});
+    const sorted=Object.entries(m).sort((a,b)=>b[1]-a[1]);
+    const max=sorted[0]?.[1]||1;
+    if (!sorted.length){
+      document.getElementById(listId).innerHTML='<div class="empty-state"><span>📭</span>Sin datos</div>';
+      document.getElementById(totId).textContent='0 pedidos';
+      return;
+    }
+    document.getElementById(listId).innerHTML=sorted.map(([n,c])=>`
+      <div class="ps-row">
+        <div style="display:flex;justify-content:space-between;margin-bottom:.25em">
+          <span style="color:#6b7a99">${n.replace('RACC ','')}</span>
+          <span style="color:${color};font-weight:700">${c} ped.</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" style="width:${(c/max*100).toFixed(0)}%;background:${color}"></div></div>
+      </div>`).join('');
+    document.getElementById(totId).textContent=`${items.length} pedidos · €${fmt(items.reduce((s,d)=>s+d.importe,0))}`;
+  }
+  buildPuntosList(ppItems,'parcialList','parcialTotal','#f97316');
+  buildPuntosList(ptItems,'totalList','totalTotal','#ec4899');
+
+  // ── Chart 4: Carnet % grouped bar ───────────────────────────────────────
+  destroyChart('carnet');
+  const cDef=[
+    {k:'B',l:'B — Coche',c:'#3b6ef8'},{k:'Puntos Parcial',l:'Puntos Parcial',c:'#f97316'},
+    {k:'Puntos Total',l:'Puntos Total',c:'#ec4899'},{k:'AM',l:'AM — Ciclomotor',c:'#10b981'},
+    {k:'A2',l:'A2 — Moto',c:'#a855f7'},{k:'A1',l:'A1 — Moto',c:'#0ea5e9'},{k:'A',l:'A — Moto',c:'#d946ef'}
+  ];
+  const cCount={},cEur2={};
+  DATA.forEach(d=>{cCount[d.carnet]=(cCount[d.carnet]||0)+1;cEur2[d.carnet]=(cEur2[d.carnet]||0)+d.importe;});
+  const pctPed=cDef.map(c=>+((cCount[c.k]||0)/DATA.length*100).toFixed(1));
+  const pctEurC=cDef.map(c=>+((cEur2[c.k]||0)/totalAll*100).toFixed(1));
+
+  chartInstances.carnet = new Chart(document.getElementById('chartCarnet'),{
+    type:'bar',
+    data:{labels:cDef.map(c=>c.l),datasets:[
+      {label:'% Pedidos',data:pctPed,backgroundColor:cDef.map(c=>c.c+'cc'),borderColor:cDef.map(c=>c.c),borderWidth:1,borderRadius:4},
+      {label:'% Facturación',data:pctEurC,backgroundColor:cDef.map(c=>c.c+'33'),borderColor:cDef.map(c=>c.c),borderWidth:1,borderRadius:4,borderDash:[]}
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{color:'#6b7a99',font:{size:11}}},tooltip:{callbacks:{label:ctx=>`${ctx.dataset.label}: ${ctx.raw}%`}}},
+      scales:{
+        x:{ticks:{color:'#6b7a99',font:{size:10}},grid:{color:'#e2e6ef'}},
+        y:{ticks:{color:'#6b7a99',callback:v=>v+'%'},grid:{color:'#e2e6ef'},max:70}
+      }}
+  });
+
+  // Carnet legend
+  document.getElementById('carnetLegend').innerHTML=cDef.map((c,i)=>`
+    <div class="cl-row">
+      <div class="cl-dot" style="background:${c.c}"></div>
+      <span class="cl-name">${c.l}</span>
+      <span class="cl-pct" style="color:${c.c}">${pctPed[i]}%</span>
+      <span class="cl-eur">${pctEurC[i]}% €</span>
+    </div>`).join('');
+
+  // ── TABLE ────────────────────────────────────────────────────────────────
+  const PAGE_SIZE=15;
+  let filtered=[...DATA],currentPage=1,sortKey='pedido',sortDir=1;
+  const selT=document.getElementById('filterTarifa');
+  const selF=document.getElementById('filterFecha');
+  const selC=document.getElementById('filterCarnet');
+
+  // Reset & repopulate selects
+  [selT,selF,selC].forEach(s=>{ while(s.options.length>1)s.remove(1); });
+  [...new Set(DATA.map(d=>d.tarifa))].sort().forEach(t=>{const o=document.createElement('option');o.value=t;o.textContent=t;selT.appendChild(o);});
+  [...new Set(DATA.map(d=>d.fecha))].sort((a,b)=>toDate(a)-toDate(b)).forEach(f=>{const o=document.createElement('option');o.value=f;o.textContent=f;selF.appendChild(o);});
+  [...new Set(DATA.map(d=>d.carnet))].sort().forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;selC.appendChild(o);});
+
+  function applyFilters(){
+    const s=document.getElementById('filterAutoescuela').value.toLowerCase();
+    filtered=DATA.filter(d=>(!s||d.autoescuela.toLowerCase().includes(s))&&(!selT.value||d.tarifa===selT.value)&&(!selF.value||d.fecha===selF.value)&&(!selC.value||d.carnet===selC.value));
+    currentPage=1;renderTable();
+  }
+  window.sortTable=k=>{sortKey===k?sortDir*=-1:(sortKey=k,sortDir=1);renderTable();};
+  const cBadge={'B':'tag-B','AM':'tag-AM','A':'tag-A','A1':'tag-A1','A2':'tag-A2','Puntos Parcial':'tag-PP','Puntos Total':'tag-PT'};
+
+  function renderTable(){
+    const sorted=[...filtered].sort((a,b)=>{
+      if(sortKey==='importe')return(a.importe-b.importe)*sortDir;
+      if(sortKey==='fecha')return(toDate(a.fecha)-toDate(b.fecha))*sortDir;
+      return(a[sortKey]>b[sortKey]?1:-1)*sortDir;
+    });
+    const st=(currentPage-1)*PAGE_SIZE;
+    document.getElementById('tabla-body').innerHTML=sorted.slice(st,st+PAGE_SIZE).map(d=>`
+      <tr>
+        <td style="color:#a0aec0;font-size:.9em">#${d.pedido}</td>
+        <td style="white-space:nowrap">${d.fecha}</td>
+        <td style="font-weight:500">${d.autoescuela}</td>
+        <td style="color:#6b7a99;font-size:.93em">${d.tarifa}</td>
+        <td><span class="tag-tipo ${cBadge[d.carnet]||'tag-B'}">${d.carnet}</span></td>
+        <td><span class="badge-pagado">Pagado</span></td>
+        <td class="importe-cell">€${fmt(d.importe,2)}</td>
+      </tr>`).join('');
+    const tf=filtered.reduce((s,d)=>s+d.importe,0);
+    document.getElementById('count-label').textContent=`${filtered.length} pedidos · €${fmt(tf)}`;
+    const pages=Math.ceil(filtered.length/PAGE_SIZE)||1;
+    const pag=document.getElementById('pagination');
+    pag.innerHTML=`<span class="page-info">Pág. ${currentPage}/${pages}</span>`;
+    for(let i=1;i<=pages;i++){const b=document.createElement('button');b.textContent=i;if(i===currentPage)b.classList.add('active');b.onclick=()=>{currentPage=i;renderTable();};pag.appendChild(b);}
+  }
+
+  // Bind filter events (remove old listeners by cloning)
+  ['filterAutoescuela','filterTarifa','filterFecha','filterCarnet'].forEach(id=>{
+    const el=document.getElementById(id);
+    const clone=el.cloneNode(true);
+    el.parentNode.replaceChild(clone,el);
+    clone.addEventListener(id==='filterAutoescuela'?'input':'change',applyFilters);
+  });
+  // Re-bind selects references after clone
+  renderTable();
+
+} // end initDashboard
+</script>
+</body>
+</html>
